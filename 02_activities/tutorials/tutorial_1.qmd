@@ -13,8 +13,8 @@ You will need to install PLINK and run the analyses. Please follow the OS-specif
 
 A PLINK binary dataset consists of three files:
 
--   **gwa.qc.bed** - Binary genotype matrix (compressed, encoded format)
--   **gwa.qc.bim** - SNP annotation file: chromosome, SNP ID, base-pair position, alleles
+-   **gwa.qc.bed** - Binary genotype matrix (compressed, encoded format). The reason why have this type of format is because the genotype matrix is very large, can have billions of entries, and have thousands of samples. So it is high dimensional. For that reason the file is compressed and it is encoded known as binary genotype file.
+-   **gwa.qc.bim** - SNP annotation file: chromosome, SNP ID, base-pair position, alleles. It shows information of SNP stored in genotype matrix
 -   **gwa.qc.fam** - Sample information file: IDs, sex, phenotype
 
 Please download the three files from the following Google Drive link and place them in `02_activities/data/`: <https://drive.google.com/drive/folders/1v-FbDqu95wdUje3foFXMdXrBjYEAJTB2?usp=drive_link>
@@ -22,6 +22,7 @@ Please download the three files from the following Google Drive link and place t
 ```{r setup, include=FALSE}
 # Set up a consistent path for all chunks of code
 knitr::opts_knit$set(root.dir = normalizePath("../../"))
+ #This creates a consistent path for all the files.
 ```
 
 ```{r, message=FALSE, warning=FALSE, results='hide'}
@@ -60,9 +61,11 @@ head ./02_activities/data/gwa.qc.bim
 | **CHR** | Chromosome number |
 | **SNP** | SNP ID (e.g., rs number) |
 | **CM** | Genetic distance (usually 0) |
-| **BP** | Physical position in base pairs |
+| **BP** | Physical position in base pairs, refers to specific position in genome |
 | **A1** | PLINK's alternative allele |
 | **A2** | the other allele (reference allele; mostly major alleles) |
+
+Since we have 2 combinations for each chromosome in total 4 bases from 2 base pairs. But in these files we only represent the compressed version, only representing one of the bases in the pair.
 
 ### 3. Understanding the .bed file
 
@@ -71,6 +74,9 @@ The .bed file stores encoded genotypes in a compact binary format. It is not hum
 Convert to readable format:
 
 ```{bash,results='hide',message=FALSE, warning=FALSE}
+#plink2 --bfile ./02_activities/data/gwa.qc --export A --out ./02_activities/data/gwa_qc_additive
+#Here is one example of additive coding. The export Option A is for additive effects
+
 plink2 --bfile ./02_activities/data/gwa.qc --export A --out ./02_activities/data/gwa_qc_additive
 ```
 
@@ -80,7 +86,11 @@ This creates a .raw file with dosage coding:
 
 1 = heterozygous
 
-2 = homozygous for A2 (REF alleles are counted by default)
+2 = homozygous for A2 (REF alleles are counted by default). So basically we are counting the major allele as the reference.
+
+It is very common to have missing data, but can add commands to remove remove these sites.
+
+In the genotype matrix, we see that the rows represent different individuals, and for each we can see the identity of each SNP.
 
 ```{r}
 # Load genotype data
@@ -123,7 +133,7 @@ O(HET_A1) - Observed heterozygote frequency (proportion).
 
 E(HET_A1) - Expected heterozygote frequency under HWE.
 
-P - Hardy-Weinberg p-value testing deviation from equilibrium.
+P - Hardy-Weinberg p-value testing deviation from equilibrium. This is the most important column
 
 For QC, SNPs with very low P are often removed, as this may indicate genotyping error.
 
@@ -142,6 +152,8 @@ freq <- fread("./02_activities/data/gwa_qc_freq.afreq")
 head(freq)
 ```
 
+Here the allele frequency counts the allele frequency that we are trying to estimate. It tells us what combination of alleles are counting.
+
 ### 6. Subset SNPs and Individuals
 
 #### Step 1: Create SNP and sample list files
@@ -149,13 +161,14 @@ head(freq)
 ```{bash,message=FALSE, warning=FALSE}
 # Create SNP list file with 4 example SNPs
 setopt interactivecomments
+#Here print some interesting SNPs that are printed to the file
 printf "%s\n" rs1525873 rs2902663 rs343376 rs3813199 > ./02_activities/data/snplist.txt
 
 # Create sample list file with header + 3 samples
-# echo "FID IID" > ./02_activities/data/samplist.txt
-# echo "0 A2001" >> ./02_activities/data/samplist.txt
-# echo "2 A2003" >> ./02_activities/data/samplist.txt
-# echo "5 A2006" >> ./02_activities/data/samplist.txt
+#echo "FID IID" > ./02_activities/data/samplist.txt
+#echo "0 A2001" >> ./02_activities/data/samplist.txt
+#echo "2 A2003" >> ./02_activities/data/samplist.txt
+#echo "5 A2006" >> ./02_activities/data/samplist.txt
 
 ```
 
@@ -166,20 +179,25 @@ plink2 --bfile ./02_activities/data/gwa.qc \
       --extract ./02_activities/data/snplist.txt \
       --recode A \
       --out ./02_activities/data/geno.additive
+#The bfile specific that path to file that need the analysis, it requires 3 files, if one of them is lost then, this will not run. 
 
 # --keep ./02_activities/data/samplist.txt can be used to extract a specific list of samples
 ```
 
 ```{r}
-# Load genotype data
+# Load genotype data into R and make some operations.
 geno_subset <- fread("./02_activities/data/geno.additive.raw")
+#This will omit any data that has NA.
 geno_subset=na.omit(geno_subset)
+#In this case, code the phenotype column as a binary trait, that will be used in the logistic regression analysis, since the convention is that disease is coded as 1 and controls as 0, need to substract the the phenotype -1 since the original data the phenotype was coded as 2 and 1. 
 geno_subset$PHENOTYPE=geno_subset$PHENOTYPE-1
 head(geno_subset)
 table(geno_subset$PHENOTYPE)
 ```
 
 ##### Alternatively, we can load all three files into R.
+
+R can do the analysis, but I will be slower than PLINK2 since the program was designed to optimize the extraction process.
 
 The PLINK2 commands are especially useful when working with a large number of SNPs (genome-wide), while R is better suited for loading smaller subsets of genotype data.
 
@@ -196,6 +214,8 @@ geno_mat<- readPlinkToMatrixByIndex('./02_activities/data/gwa.qc', 1:N, indx.SNP
 dim(geno_mat)
 head(geno_mat)
 ```
+
+Sometimes we not only need to extract a few samples but need to extract a massive number of samples
 
 ##### R functions to calculate the allele frequency.
 
@@ -242,13 +262,15 @@ hwe[hwe$ID%in%c('rs1525873','rs2902663','rs343376','rs3813199'),]
 
 ### 7. Logistic Regression: Additive Model
 
+We talked that for Binary phenotype, when have affected and unaffected status, in that case, we need to perform a logistic regression model. In regression the probability of Y is linked to a variable and determine if there is a relationship between X and Y. In the case of logistic regression we are regressing a binary variable into a predictive variable. The goal of logisit c regresison is to model the prob of Y=1 or Y=0 using the predictor variable. Here logistic regression defins the prob of Y=1, so in this case need to do the log transformatio, of the model P(Y=1\|X)/1-P(Y=1\|X). We estiamte the beta1 since it modifies the probability of developing a particual disease, and the model will determine how significant is the influence of b1 in the prob of disease. Bae on the effect provided by th software can calcualte the probability of the disease by using the regression model.
+
 ```{r,message=FALSE, warning=FALSE}
-#Pick SNP rs1525873
+#Pick SNP rs1525873. Here extract a genotype at specific genomic location
 table(geno_subset$rs1525873_T)
-freq[freq$ID=='rs1525873',]
+freq[freq$ID=='rs1525873',] #freq is the file that load before in R and contains the allele frequency of SNPs in the population
 ```
 
-The T allele is the major allele, with frequency 1 - 0.247497. Therefore, most samples have genotype coded as 2 rather than 0.
+The T allele is the major allele, with frequency 1 - 0.247497. Therefore, most samples have genotype coded as 2 rather than 0. When we look at the genotype matrix we do not see the nomenclature as A/a but obtain the actual base that represent the minor allele and the major allele.
 
 ```{r,message=FALSE, warning=FALSE}
 # Fit logistic regression model
@@ -256,6 +278,7 @@ model <- glm(PHENOTYPE ~ rs1525873_T, data = geno_subset, family = binomial)
 
 # View model summary
 summary(model)
+#I the model summary obtain the Estimate which represents the beta coeficient for the particular variant. 
 table(geno_subset$rs1525873_T)
 ```
 
@@ -314,11 +337,13 @@ p1=ggplot() +
   theme_minimal()
 
 print(p1)
-#ggsave("./02_activities/data/p1_plot.png", plot = p1, width = 7, height = 5, dpi = 300)
+ggsave("./02_activities/data/p1_plot.png", plot = p1, width = 7, height = 5, dpi = 300)
 
 ```
 
-**Interpretation**: We performed logistic regression to test the association between genotype (rs1525873) and the binary phenotype. The regression coefficient for rs1525873 is 1.93140 (p <2e-16), indicating that each additional copy of the T allele is associated with increased odds of being a case. The significant p-value suggests evidence of an association between this SNP and the phenotype in our sample.
+In the Plot, can see the logistic regression model that was generated and for each genotype have 3 possibilities for the genotype on an additive model. Can see that individuals are distributed into 3 genotypes determined by the number of alleles homozygous WT, hetero and homozygous mutation. can see by the size of circles represent the amount of individuals in each genotype and the number of individual with genotype 2 is bigger in the disease status.
+
+**Interpretation**: We performed logistic regression to test the association between genotype (rs1525873) and the binary phenotype. The regression coefficient for rs1525873 is 1.93140 (p \<2e-16), indicating that each additional copy of the T allele is associated with increased odds of being a case. The significant p-value suggests evidence of an association between this SNP and the phenotype in our sample.
 
 In practice, when testing genetic associations, we include additional covariates in the model, such as age, sex, and principal components to adjust for confounding effects. We will cover this in more detail later in the course.
 
@@ -389,6 +414,8 @@ print(p2)
 ```
 
 **Interpretation**: In the additive model, we see a clear dose-response relationship between genotype and disease risk: each additional copy of the risk allele increases the log-odds of being a case, as reflected in the significant and positive regression coefficient (\~1.93). By contrast, the dominance model treats any presence of the risk allele (Aa or AA) the same, leading to a steeper estimated effect (\~2.76). The AIC is higher under the dominance model (AIC=3705.6), indicating the additive model (AIC=3250.2) may fit slightly better overall by capturing a more gradual allele-dose effect.
+
+The AIC is better when the value is smallest.
 
 ##### Recessive Coding:
 
