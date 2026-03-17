@@ -13,7 +13,7 @@ You will need to install PLINK and run the analyses. Please follow the OS-specif
 
 A PLINK binary dataset consists of three files:
 
--   **gwa.qc.bed** - Binary genotype matrix (compressed, encoded format). The reason why have this type of format is because the genotype matrix is very large, can have billions of entries, and have thousands of samples. So it is high dimensional. For that reason the file is compressed and it is encoded known as binary genotype file.
+-   **gwa.qc.bed** - Binary genotype matrix (compressed, encoded format). The reason why have this type of format is because the genotype matrix is very large, can have billions of entries, and have thousands of samples. So it is high dimensional. For that reason the file is compressed and it is encoded. It is a very large file
 -   **gwa.qc.bim** - SNP annotation file: chromosome, SNP ID, base-pair position, alleles. It shows information of SNP stored in genotype matrix
 -   **gwa.qc.fam** - Sample information file: IDs, sex, phenotype
 
@@ -22,7 +22,8 @@ Please download the three files from the following Google Drive link and place t
 ```{r setup, include=FALSE}
 # Set up a consistent path for all chunks of code
 knitr::opts_knit$set(root.dir = normalizePath("../../"))
- #This creates a consistent path for all the files.
+
+ #This creates a consisten path for all the files.
 ```
 
 ```{r, message=FALSE, warning=FALSE, results='hide'}
@@ -262,7 +263,7 @@ hwe[hwe$ID%in%c('rs1525873','rs2902663','rs343376','rs3813199'),]
 
 ### 7. Logistic Regression: Additive Model
 
-We talked that for Binary phenotype, when have affected and unaffected status, in that case, we need to perform a logistic regression model. In regression the probability of Y is linked to a variable and determine if there is a relationship between X and Y. In the case of logistic regression we are regressing a binary variable into a predictive variable. The goal of logisit c regresison is to model the prob of Y=1 or Y=0 using the predictor variable. Here logistic regression defins the prob of Y=1, so in this case need to do the log transformatio, of the model P(Y=1\|X)/1-P(Y=1\|X). We estiamte the beta1 since it modifies the probability of developing a particual disease, and the model will determine how significant is the influence of b1 in the prob of disease. Bae on the effect provided by th software can calcualte the probability of the disease by using the regression model.
+We talked that for Binary phenotype, when have affected and unaffected status, in that case, we need to perform a logistic regression model. In regression the probability of Y is linked to a variable and determine if there is a relationship between X and Y. In the case of logistic regression we are regressing a binary variable into a predictive variable. The goal of logisit c regresison is to model the prob of Y=1 or Y=0 using the predictor variable. Here logistic regression defins the prob of Y=1, so in this case need to do the log transformation, of the model P(Y=1\|X)/1-P(Y=1\|X). We estiamte the beta1 since it modifies the probability of developing a particual disease, and the model will determine how significant is the influence of b1 in the prob of disease. Bae on the effect provided by th software can calcualte the probability of the disease by using the regression model.
 
 ```{r,message=FALSE, warning=FALSE}
 #Pick SNP rs1525873. Here extract a genotype at specific genomic location
