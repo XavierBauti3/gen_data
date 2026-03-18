@@ -137,7 +137,12 @@ cat("The HWE p-values for SNPs:", "\n", paste(Subset_SNPs, collapse = ", "), "ar
 (i) Conduct a linear regression to test the association between SNP rs1861 and the phenotype. What is the p-value?
 
 ```{r}     
-Subset_SNPs_Geno_Mtrx <- na.omit(Subset_SNPs_Geno_Mtrx)
+#First, need to determine if there is any missing value for the phenotype column or the SNP of interest rs1861 in any of the sample in the Genotype matrix
+sum(is.na(Subset_SNPs_Geno_Mtrx$PHENOTYPE))
+sum(is.na(Subset_SNPs_Geno_Mtrx$rs1861_C))
+
+#There are 36 samples with missing genotypes for the SNP of interest and these need to be removed.
+Subset_SNPs_Geno_Mtrx <- Subset_SNPs_Geno_Mtrx %>% filter(!is.na(Subset_SNPs_Geno_Mtrx$rs1861_C))
 head(Subset_SNPs_Geno_Mtrx)
 table(Subset_SNPs_Geno_Mtrx$rs1861_C)
 Subset_SNP_All_Freq[Subset_SNP_All_Freq$ID == "rs1861",]
