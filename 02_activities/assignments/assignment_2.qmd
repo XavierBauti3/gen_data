@@ -192,14 +192,15 @@ manhattan(A2_assoc_Beta_SNP,
           suggestiveline = FALSE,
           cex.axis = 1.5,
           col = c("lightblue", "lightslateblue"),
-          annotatePval=5e-8)
+          annotatePval=5e-8,
+          annotateTop = FALSE)
 dev.off()
 ```
 
 (iii) Create a QQ plot of the GWAS p-values.
 
 ```{r}
-png("./02_activities/data/A2_QQ_Plot.png", width = 1200, height = 80, res = 150)
+png("./02_activities/data/A2_QQ_Plot.png", width = 1200, height = 800, res = 150)
 qq(A2_assoc_Beta_SNP$P, main = "Q-Q Plot of Assignment GWAS p-values")
 dev.off()
 ```
