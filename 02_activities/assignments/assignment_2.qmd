@@ -7,20 +7,75 @@ You will need **PLINK2** installed and available in your PATH. Please follow the
 
 #### Question 1: Data inspection
 
+```{r}
+#Set a consistent path for the working directory for the assignment
+knitr::opts_knit$set(root.dir = normalizePath("../../"))
+```
+
+```{r}
+#Need to upload the required libraries
+library(data.table)
+library(ggplot2)
+library(seqminer)
+library(dplyr)
+library(qqman)
+```
+
 Before you run any models, first get familiar with the dataset. You may find `data.table::fread()` in R helpful for reading `.bim` and `.fam` files.
 
 (i) Read the `.fam` file. How many samples does the dataset contain?
 
 ```{r}
-# Your code here...
+Fam_file <- fread("./02_activities/data/gwa.A2.fam")
+nrow(Fam_file)
+head(Fam_file)
+cat("The .fam file contains:", nrow(Fam_file), "samples" , "\n")
+table(Fam_file$V5)
+cat("From the 4000 samples, 2000 are males and 2000 samples are females, based on the number of unique values from column 5 that encodes information about sex", "\n")
 ```
+
+```{bash}
+wc -l ./02_activities/data/gwa.A2.fam
+```
+
+The bash command gives the same results, in total, we have 4000 samples in the .fam file
 
 (ii) Read the `.bim` file. How many SNPs does the dataset contain?
 
 ```{r}
-# Your code here...
+SNP_Info <- fread("./02_activities/data/gwa.A2.bim")
+head(SNP_Info)
+nrow(SNP_Info)
+length(unique(SNP_Info$V2)) 
+cat("The bim file contains:", nrow(SNP_Info), "unique SNPs", "\n")
+``` 
+
+```{bash}
+head ./02_activities/data/gwa.A2.bim
+wc -l ./02_activities/data/gwa.A2.bim
 ```
 
+In total we have 306,102 SNPs
+
+(iii) Make a histogram (or density plot) of the phenotype. Does it look roughly Gaussian?
+
+```{r}
+Pheno_Histo <- ggplot(Fam_file, aes(x = V6)) +
+    geom_histogram(fill = "antiquewhite4") +
+    labs(title = "Histogram Distribution of Phenotype Severity",
+    x = "Phenotype spectrum", y = "Density") + 
+    theme_classic()
+print(Pheno_Histo)
+
+Pheno_Density <- ggplot(Fam_file, aes(x = V6)) +
+    geom_density(fill = "antiquewhite4") +
+    labs(title = "Density Distribution of Phenotype severity",
+    x = "Phenotype spectrum", y = "Density") +
+    theme_classic()
+print(Pheno_Density)
+
+cat("Yes, based on the shape of the curve of the distribution of the phenotype, it looks Gaussian. The spectrum of phenotypic values cluster around the mean, and the distribution has a roughly symmetric bell-shaped curve with a single peak at its center, suggesting the data is approximately normally distributed" , "\n")
+```
 
 #### Question 2: Quality control (QC)
 
@@ -29,29 +84,48 @@ Now we will perform QC using PLINK2 for the genotype files in `gwa.A2`.
 (i) Using PLINK2 from the command line (bash), perform basic QC with the following filters: MAF ≥ 0.05, SNP missingness (`--geno`) ≤ 0.01, individual missingness (`--mind`) ≤ 0.10, and HWE p-value ≥ 0.00005, and output the QC’ed dataset as `gwa.qc.A2`.
 
 ```{bash}
-# Your code here...
+plink2 --bfile ./02_activities/data/gwa.A2 --maf 0.05 --geno 0.01 --mind 0.1 --hwe 0.00005 --make-bed --out ./02_activities/data/gwa.qc.A2
+
+wc -l ./02_activities/data/gwa.qc.A2.bed
+wc -l ./02_activities/data/gwa.qc.A2.bim
+wc -l ./02_activities/data/gwa.qc.A2.fam
 ```
 
 #### Question 3: Relatedness
 
 In this question, you will use **PLINK2’s built-in KING-robust kinship** (`--king-cutoff`) detect and remove related individuals.
 
-i)  Perform LD pruning on `gwa.qc.A2` using PLINK2 with the following parameters: `--indep-pairwise 500 50 0.05`, and then generate a new dataset containing only the pruned SNPs.
+(i)  Perform LD pruning on `gwa.qc.A2` using PLINK2 with the following parameters: `--indep-pairwise 500 50 0.05`, and then generate a new dataset containing only the pruned SNPs.
 
 ```{bash}
-# Your code here...
+plink2 --bfile ./02_activities/data/gwa.qc.A2 --indep-pairwise 500 50 0.05 --out ./02_activities/data/gwa.qc.A2
+wc -l ./02_activities/data/gwa.qc.A2.prune.in
+wc -l ./02_activities/data/gwa.qc.A2.prune.out
+```
+
+Then Need to create the new datasets containing the independent SNPs after LD pruning. 
+```{bash}
+plink2 --bfile ./02_activities/data/gwa.qc.A2 --extract ./02_activities/data/gwa.qc.A2.prune.in --make-bed --out ./02_activities/data/gwa.qc.A2.pruned
+wc -l ./02_activities/data/gwa.qc.A2.pruned.bim
+wc -l ./02_activities/data/gwa.qc.A2.pruned.fam
+wc -l ./02_activities/data/gwa.qc.A2.pruned.bed
 ```
 
 (ii) Use PLINK2 on the LD-pruned dataset to identify a set of unrelated individuals up to (approximately) 2nd-degree relatives (use a kinship cutoff of 0.0884).
 
 ```{bash}
-# Your code here...
+plink2 --bfile ./02_activities/data/gwa.qc.A2.pruned --king-cutoff 0.0884 --out ./02_activities/data/gwa.qc.A2_king
+wc -l ./02_activities/data/gwa.qc.A2_king.king.cutoff.in.id
+wc -l ./02_activities/data/gwa.qc.A2_king.king.cutoff.out.id
 ```
 
 (iii) Using the unrelated individual list from part (ii), create a dataset containing only unrelated individuals and name it `gwa.qc_unrelated.A2`.
 
 ```{bash}
-# Your code here...
+plink2 --bfile ./02_activities/data/gwa.qc.A2 --keep ./02_activities/data/gwa.qc.A2_king.king.cutoff.in.id --make-bed --out ./02_activities/data/gwa.qc_unrelated.A2
+wc -l ./02_activities/data/gwa.qc_unrelated.A2.bed
+wc -l ./02_activities/data/gwa.qc_unrelated.A2.bim
+wc -l ./02_activities/data/gwa.qc_unrelated.A2.fam
 ```
 
 #### Question 4: principal component analysis (PCA)
@@ -60,9 +134,19 @@ i)  Perform LD pruning on `gwa.qc.A2` using PLINK2 with the following parameters
 
     (Hint: Refer to the PCA section in the GWAS Tutorial II. You should use a `*.prune.in` file to select a set of independent SNPs before performing PCA.)
 
+First, It is necessary to create new datasets containing only independent SNPs and unrelated samples 
 ```{bash}
-# Your code here...
+plink2 --bfile ./02_activities/data/gwa.qc_unrelated.A2 --extract ./02_activities/data/gwa.qc.A2.prune.in --make-bed --out ./02_activities/data/gwa.qc.A2_unrelated_pruned
+wc -l ./02_activities/data/gwa.qc.A2_unrelated_pruned.bed
+wc -l ./02_activities/data/gwa.qc.A2_unrelated_pruned.bim
+wc -l ./02_activities/data/gwa.qc.A2_unrelated_pruned.fam
 ```
+
+With these new datasets, it is possible to run PCA analysis 
+```{bash}
+plink2 --bfile ./02_activities/data/gwa.qc.A2_unrelated_pruned --pca 20 --out ./02_activities/data/gwa.qc.A2_unrelated_pruned_PCA
+```
+
 
 #### Question 5: GWAS analyses
 
@@ -77,19 +161,48 @@ Assume that:
 (i) Using PLINK2, run a linear regression GWAS using `gwa.qc_unrelated.A2` as the input dataset. Adjust for PCs 1–3 as covariates.
 
 ```{bash}
-# Your code here...
+plink2 --bfile ./02_activities/data/gwa.qc_unrelated.A2 --ci 0.95 --glm --covar ./02_activities/data/gwa.qc.A2_unrelated_pruned_PCA.eigenvec --covar-name PC1,PC2,PC3 --adjust --out ./02_activities/data/gwa.qc.A2_assoc
 ```
 
 (ii) Create a Manhattan plot of the GWAS results.
 
 ```{r}
-# Your code here...
+A2_assoc_file <- fread("./02_activities/data/gwa.qc.A2_assoc.PHENO1.glm.linear")
+head(A2_assoc_file)
+nrow(A2_assoc_file)
+length(unique(A2_assoc_file$ID))
+
+A2_assoc_Beta_SNP <- A2_assoc_file[TEST == "ADD"]
+head(A2_assoc_Beta_SNP)
+
+#Then, it is necessary to change the name of the columns from the PLINK2 output file to meet the specifications used by qqman
+setnames(A2_assoc_Beta_SNP, c("#CHROM","POS","ID"), c("CHR","BP","SNP"))
+
+#Then, need to generate the Manhattan Plot
+png("./02_activities/data/A2_Manhattan_Plot.png", width = 1200, height = 800, res = 150)
+
+manhattan(A2_assoc_Beta_SNP,
+          chr = "CHR",
+          bp  = "BP",
+          snp = "SNP",
+          p   = "P",
+          main = "GWAS Manhattan Plot for Quantitative Phenotype",
+          xlab = "Chromosome Number",
+          ylab = "-log10 P",
+          suggestiveline = FALSE,
+          cex.axis = 1.5,
+          col = c("lightblue", "lightslateblue"),
+          annotatePval=5e-8,
+          annotateTop = FALSE)
+dev.off()
 ```
 
 (iii) Create a QQ plot of the GWAS p-values.
 
 ```{r}
-# Your code here...
+png("./02_activities/data/A2_QQ_Plot.png", width = 1200, height = 800, res = 150)
+qq(A2_assoc_Beta_SNP$P, main = "Q-Q Plot of Assignment GWAS p-values")
+dev.off()
 ```
 
 ### Criteria
