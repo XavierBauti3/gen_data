@@ -220,3 +220,4 @@ Below is a short description of several tools that are frequently used in GWAS a
 [GATK]{.underline} – Broad Institute toolkit for variant calling and processing of high-throughput sequencing data.
 
 [TensorQTL]{.underline} – GPU-optimised software for rapid QTL mapping.
+
