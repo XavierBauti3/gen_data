@@ -1,6 +1,9 @@
 ---
 title: "Assignment #1"
 format: html
+knitr:
+  opts_chunk:
+    engine.path: "C:/Program Files/Git/usr/bin/bash.exe"
 ---
 
 ## Assignment 1
@@ -19,92 +22,289 @@ Before fitting any models, it is essential to understand the data. Use R or bash
 
 (i) Read the .fam file. How many samples does the dataset contain?
 
-```         
-# Your answer here...
+```{r setup, include=FALSE}   
+#First need to specify a consistent path for the working directory for the assignment
+knitr::opts_knit$set(root.dir = normalizePath("../../"))
+```
+
+```{r}
+##Then need to upload the libraries to current session of R
+library(data.table)
+library(ggplot2)
+library(seqminer)
+library(HardyWeinberg)
+library(dplyr)
+```
+
+```{r}
+Fam_File <- fread("./02_activities/data/gwa.qc.A1.fam")
+head(Fam_File)
+nrow(Fam_File)
+#It contains 4000 samples (since each row represents a different individual)
+```
+
+```{bash}
+head ./02_activities/data/gwa.qc.A1.fam
+wc -l ./02_activities/data/gwa.qc.A1.fam
+#This code provides the same results using bash commands
 ```
 
 (ii) What is the 'variable type' of the response variable (i.e.Continuous or binary)?
 
-```         
-# Your answer here...
+```{r}        
+head(Fam_File)
+length(unique(Fam_File$V6))
+#Since the unique possible values for the phenotype variable is the same as the number of samples, this represent a Continuous variable
 ```
 
 (iii) Read the .bim file. How many SNPs does the dataset contain?
 
-```         
-# Your answer here...
+```{r}         
+Bim_File <- fread("./02_activities/data/gwa.qc.A1.bim")
+head(Bim_File)
+nrow(Bim_File)
+length(unique(Bim_File$V2))
+#It contains 101083 unique SNPs 
 ```
 
-#### Question 2: Allele Frequency Estimation
+```{bash}
+wc -l ./02_activities/data/gwa.qc.A1.bim   
+```
+
+ #### Question 2: Allele Frequency Estimation
 
 (i) Load the genotype matrix for SNPs rs1861, rs3813199, rs3128342, and rs11804831 using additive coding. What are the allele frequencies (AFs) for these four SNPs?
 
-```         
-# Your code here...
+```{bash, results='hide', message=FALSE, warning=FALSE}   
+printf "%s\n" rs1861 rs3813199 rs3128342 rs11804831 > ./02_activities/data/SNP_list.A1.txt
+
+plink2 --bfile ./02_activities/data/gwa.qc.A1 --extract ./02_activities/data/SNP_list.A1.txt --recode A --out ./02_activities/data/gwa.qc_Subset_SNPs_additive
+head ./02_activities/data/gwa.qc_Subset_SNPs_additive.raw
+```
+
+```{r}
+Subset_SNPs_Geno_Mtrx <- fread("./02_activities/data/gwa.qc_Subset_SNPs_additive.raw")
+head(Subset_SNPs_Geno_Mtrx)
+
+#Compute the allele frequency for each of the four SNPs, ignoring names
+Subset_SNPs_allele_freq <- apply(Subset_SNPs_Geno_Mtrx[,7:10], 2, function(x) {
+    sum(x, na.rm = T) / (2*sum(!is.na(x)))
+})
+
+Subset_SNPs_allele_freq
 ```
 
 (ii) What are the minor allele frequencies (MAFs) for these four SNPs?
 
-```         
-# Your code here...
+```{bash}         
+plink2 --bfile ./02_activities/data/gwa.qc.A1 --extract ./02_activities/data/SNP_list.A1.txt --freq --out ./02_activities/data/gwa.qc_Subset_SNPs_freq
+```
+
+```{r}
+Subset_SNP_All_Freq <- fread("./02_activities/data/gwa.qc_Subset_SNPs_freq.afreq")
+head(Subset_SNP_All_Freq)
+cat("The minor allele frequencies (MAFs) for the four SNPs are:", "\n", paste(Subset_SNP_All_Freq$ID, collapse=", "),"are", "\n", paste(Subset_SNP_All_Freq$ALT_FREQS, collapse = " "), "respectively", "\n")
+
+Reference_All_freq <- 1 - Subset_SNP_All_Freq$ALT_FREQS
+round(Reference_All_freq, 5) == round(Subset_SNPs_allele_freq, 5)
+#This confirms that the results from part I and II are the same
 ```
 
 #### Question 3: Hardy–Weinberg Equilibrium (HWE) Test
 
 (i) Conduct the Hardy–Weinberg Equilibrium (HWE) test for all SNPs in the .bim file. Then, load the file containing the HWE p-value results and display the first few rows of the resulting data frame.
 
-```         
-# Your code here...
+```{bash}         
+plink2 --bfile ./02_activities/data/gwa.qc.A1 --hardy --out ./02_activities/data/gwa.qc.A1_hwe
+```
+
+```{r}
+HWE_test <- fread("./02_activities/data/gwa.qc.A1_hwe.hardy")
+head(HWE_test)
 ```
 
 (ii) What are the HWE p-values for SNPs rs1861, rs3813199, rs3128342, and rs11804831?
 
-```         
-# Your code here...
+```{r} 
+Subset_SNPs <- c("rs3813199", "rs11804831", "rs3128342", "rs1861")  
+HWE_p_val <- HWE_test$P[HWE_test$ID %in% Subset_SNPs]
+HWE_p_val
+cat("The HWE p-values for SNPs:", "\n", paste(Subset_SNPs, collapse = ", "), "are", HWE_p_val, "respectively", "\n")
 ```
 
 #### Question 4: Genetic Association Test
 
 (i) Conduct a linear regression to test the association between SNP rs1861 and the phenotype. What is the p-value?
 
-```         
-# Your code here...
+```{r}     
+#First, need to determine if there is any missing value for the phenotype column or the SNP of interest rs1861 in any of the sample in the Genotype matrix
+sum(is.na(Subset_SNPs_Geno_Mtrx$PHENOTYPE))
+sum(is.na(Subset_SNPs_Geno_Mtrx$rs1861_C))
+
+#There are 36 samples with missing genotypes for the SNP of interest and these need to be removed.
+Subset_SNPs_Geno_Mtrx <- Subset_SNPs_Geno_Mtrx %>% filter(!is.na(Subset_SNPs_Geno_Mtrx$rs1861_C))
+head(Subset_SNPs_Geno_Mtrx)
+table(Subset_SNPs_Geno_Mtrx$rs1861_C)
+Subset_SNP_All_Freq[Subset_SNP_All_Freq$ID == "rs1861",]
+
+model_rs1861 <- glm(PHENOTYPE ~ rs1861_C, data = Subset_SNPs_Geno_Mtrx, family = gaussian)
+p_value <- summary(model_rs1861)$coefficient["rs1861_C",4]
+p_value
 ```
 
 (ii) How would you interpret the beta coefficient from this regression?
 
-```         
-# Your answer here...
+```{r} 
+Beta_rs1861 <- summary(model_rs1861)$coefficient["rs1861_C",1]
+Beta_rs1861
+
+cat("The Beta coefficient for SNP rs1861 is:", Beta_rs1861, "\n", "In this case, since we are fitting a linear regression model with a single predictor variable, the beta coefficient represents the slope of the line of best fit. Since the slope is positive and we are using an additive model, this means that for each additional A2 allele present in an individual, the value of the Phenotype increases as a rate equal to the beta coefficient and based on the p value this association is statistically significant", "\n")
 ```
 
 (iii) Plot the scatterplot of phenotype versus the genotype of SNP rs1861. Add the regression line to the plot.
 
-```         
-# Your code here...
+```{r}         
+# Make prediction over continuous range (to draw the line of best fit)
+# Create a new data frame containing a sequence of genotype values
+geno_range <- data.frame(
+   rs1861_C = seq(0, 2, length.out = 100)
+ )
+# Use the fitted linear regression model to predict the value of the phenotype 
+# for each genotype value in geno_range
+geno_range$predicted_value <- predict(model_rs1861, newdata = geno_range)
+
+# Start from the observed genotype matrix
+count_data <- Subset_SNPs_Geno_Mtrx %>%
+# Remove rows with missing genotype or missing phenotype
+  filter(!is.na(rs1861_C), !is.na(PHENOTYPE)) %>%
+ # Group data by genotype value and phenotype category 
+  group_by(rs1861_C, PHENOTYPE) %>%
+# Count how many observations fall into each genotype-phenotype combination
+  summarise(count = n(), .groups = "drop")
+
+# Start building the plot
+A1.p1=ggplot() +
+# Add points showing observed genotype-phenotype combinations
+  geom_point(
+    # Use the summarized count_data for the points
+    data = count_data,
+    # Map genotype to x-axis, phenotype to y-axis, and count to point size
+    aes(x = rs1861_C, y = PHENOTYPE, size = count),
+    color = "blue"
+  ) +
+  # Add a regression line showing predicted values across genotype values
+  geom_line(# Use the prediction data frame for the line
+    data = geno_range,
+    aes(x = rs1861_C, y = predicted_value),
+    color = "red",
+    # Set line thickness
+    size = 1.2
+  ) +
+  # Control the size range of the points
+  scale_size_continuous(range = c(2, 10)) +
+  labs(
+    title = "Linear Regression Model for the Association of PHENOTYPE ~ rs1861_C Genotype",
+    x = "rs1861_C Genotype (0/1/2)",
+    y = "Phenotype",
+    size = "Count"
+  ) +
+  # Restrict the visible x- and y-axis range
+  coord_cartesian(xlim = c(-0.5, 2.5), ylim = c(-0.1, max(count_data$PHENOTYPE))) +
+   # Apply a minimal theme for a clean appearance
+  theme_minimal()
+
+print(A1.p1)
 ```
 
 (iv) Convert the genotype coding for rs1861 to recessive coding.
 
-```         
-# Your code here...
+```{r}      
+#Create a new dataset to store the new genotype matrix based on recessive coding    
+Recessive_Geno_Mtrx <- Subset_SNPs_Geno_Mtrx  %>% select(FID, IID, PAT, MAT, SEX, PHENOTYPE, rs1861_C)
+
+Recessive_Geno_Mtrx$rs1861_C <- ifelse(Subset_SNPs_Geno_Mtrx$rs1861_C == 2, 1, 0)
+table(Subset_SNPs_Geno_Mtrx$rs1861_C)
+table(Recessive_Geno_Mtrx$rs1861_C)
+#This confirms that the code worked
 ```
 
 (v) Conduct a linear regression to test the association between the recessive-coded rs1861 and the phenotype. What is the p-value?
 
-```         
-# Your code here...
+```{r}         
+Recessive_Model <- glm(PHENOTYPE ~ rs1861_C, data = Recessive_Geno_Mtrx, family = gaussian)
+summary(Recessive_Model)
+Beta_Rec <- summary(Recessive_Model)$coefficient["rs1861_C", 1]
+Rec_p_value <- summary(Recessive_Model)$coefficient["rs1861_C",4]
+Rec_p_value
 ```
 
 (vi) Plot the scatterplot of phenotype versus the recessive-coded genotype of rs1861. Add the regression line to the plot.
 
-```         
-# Your code here...
+```{r}         
+# Make prediction over continuous range (to draw the line of best fit)
+# Create a new data frame containing a sequence of genotype values
+geno_range_rec <- data.frame(
+   rs1861_C = seq(0, 1, length.out = 100)
+ )
+# Use the fitted linear regression model to predict the value of the phenotype 
+# for each genotype value in geno_range
+geno_range_rec$predicted_value <- predict(Recessive_Model, newdata = geno_range_rec)
+
+# Start from the observed genotype matrix
+count_data_rec <- Recessive_Geno_Mtrx %>%
+# Remove rows with missing genotype or missing phenotype
+  filter(!is.na(rs1861_C), !is.na(PHENOTYPE)) %>%
+ # Group data by genotype value and phenotype category 
+  group_by(rs1861_C, PHENOTYPE) %>%
+# Count how many observations fall into each genotype-phenotype combination
+  summarise(count = n(), .groups = "drop")
+
+# Start building the plot
+A1.p1_rec = ggplot() +
+# Add points showing observed genotype-phenotype combinations
+  geom_point(
+    # Use the summarized count_data for the points
+    data = count_data_rec,
+    # Map genotype to x-axis, phenotype to y-axis, and count to point size
+    aes(x = rs1861_C, y = PHENOTYPE, size = count),
+    color = "blue"
+  ) +
+  # Add a regression line showing predicted values across genotype values
+  geom_line(# Use the prediction data frame for the line
+    data = geno_range_rec,
+    aes(x = rs1861_C, y = predicted_value),
+    color = "red",
+    # Set line thickness
+    size = 1.2
+  ) +
+  # Control the size range of the points
+  scale_size_continuous(range = c(2, 10)) +
+  labs(
+    title = "Linear Regression Model for the Association of PHENOTYPE ~ rs1861_C Genotype under Recessive coding",
+    x = "rs1861_C Genotype (0/1)",
+    y = "Phenotype",
+    size = "Count"
+  ) +
+  # Restrict the visible x- and y-axis range
+  coord_cartesian(xlim = c(-0.5, 1.5), ylim = c(-0.1, max(count_data_rec$PHENOTYPE))) +
+   # Apply a minimal theme for a clean appearance
+  theme_minimal()
+
+print(A1.p1_rec)
 ```
 
 (vii) Which model fits better? Justify your answer.
 
-```         
-# Your answer here...
+```{r}         
+summary(model_rs1861)$aic
+summary(model_rs1861)$coefficient["rs1861_C", 1]
+summary(model_rs1861)$coefficient["rs1861_C", 4]
+
+summary(Recessive_Model)$aic
+summary(Recessive_Model)$coefficient["rs1861_C", 1]
+summary(Recessive_Model)$coefficient["rs1861_C", 4]
+
+cat("Based on these results, the additive model provides slightly better performance than the recessive model. Although the beta coefficient for the recessive model is slightly higher, meaning that the rate of increase of the value of the phenotype is higher in this model, the p-value is slightly lower compared to the additive model. Furthermore, the AIC of the additive model is slightly lower indicating that the additive model fits slightly better the data", "\n")
 ```
 
 ### Criteria
